@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import uuid
+import time
 
 
 BASE_URL = "http://localhost:8000"
@@ -24,7 +25,7 @@ def get_threads():
 def get_history(thread_id):
     r = requests.get(url=f"{BASE_URL}/chat/history/{thread_id}")
     r.raise_for_status()
-    return r.json()["messages"]
+    return r.json()["message"]
 
 
 def send_message(thread_id, message):
@@ -98,8 +99,9 @@ for msg in st.session_state.messages:
         with st.chat_message("user"):
             st.markdown(msg["content"])
     elif role == "ai":
-        with st.chat_message("assistant"):
-            st.markdown(msg["content"])
+        if msg["content"]:
+            with st.chat_message("assistant"):
+                st.markdown(msg["content"])
     # elif role == "system":
     #     with st.chat_message("system"):
     #         st.write(msg["content"])
@@ -113,7 +115,10 @@ if user_input:
     st.session_state.messages.append({"type": "human", "content": user_input})
 
     # Call backend
-    updated_messages = send_message(st.session_state.current_thread, user_input)
+
+    with st.spinner("BABI AI is typing...", show_time=True):
+        updated_messages = send_message(st.session_state.current_thread, user_input)
+        time.sleep(2)  # Simulate typing delay
 
     st.session_state.messages = updated_messages
     st.rerun()

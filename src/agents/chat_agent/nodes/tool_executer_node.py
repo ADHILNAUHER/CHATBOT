@@ -1,16 +1,18 @@
 from src.agents.chat_agent.states.chat_agent_state import ChatAgentState
 from src.agents.chat_agent.tools.date_time import get_current_datetime
+from src.agents.chat_agent.tools.web_search_tool import search_the_web
+
 from langchain.messages import ToolMessage
 
 
-tools = [get_current_datetime]
+tools = [get_current_datetime, search_the_web]
 
 tools_by_name = {tool.name: tool for tool in tools}
 
 
 def tool_executer(state: ChatAgentState) -> ChatAgentState:
     """Execute the tool calls made by the LLM in the last message"""
-    
+
     result = []
 
     for tool_call in state["message"][-1].tool_calls:
