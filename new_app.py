@@ -28,13 +28,16 @@ def get_history(thread_id):
     return r.json()["message"]
 
 
-def send_message(thread_id, message):
-    r = requests.post(
+def stream_send_message(thread_id, message):
+    with requests.post(
         url=f"{BASE_URL}/chat/{thread_id}",
         params={"message": message},
-    )
-    r.raise_for_status()
-    return r.json()["message"]
+        stream=True,  # Enables chunked transfer
+    ) as r:
+        r.raise_for_status()
+        for chunk in r.iter_content(chunk_size=None, decode_unicode=True):
+            if chunk:
+                yield chunk
 
 
 # ------------------ Session State ------------------
@@ -111,14 +114,33 @@ for msg in st.session_state.messages:
 user_input = st.chat_input("Type a message")
 
 if user_input:
-    # Optimistic UI update
+    # 1. Display user message immediately
     st.session_state.messages.append({"type": "human", "content": user_input})
+    with st.chat_message("user"):
+        st.markdown(user_input)
 
-    # Call backend
+    # 2. Handle Assistant Response
+    with st.chat_message("assistant"):
+        # The spinner will wrap the request initialization
+        with st.spinner("BABI AI is thinking..."):
 
-    with st.spinner("BABI AI is typing...", show_time=True):
-        updated_messages = send_message(st.session_state.current_thread, user_input)
-        time.sleep(2)  # Simulate typing delay
+            def stream_request():
+                with requests.post(
+                    url=f"{BASE_URL}/chat/{st.session_state.current_thread}",
+                    params={"message": user_input},
+                    stream=True,  # Keeps connection open for tokens
+                ) as r:
+                    r.raise_for_status()
+                    for chunk in r.iter_content(chunk_size=None, decode_unicode=True):
+                        if chunk:
+                            yield chunk
 
-    st.session_state.messages = updated_messages
-    st.rerun()
+            # We initialize the generator before passing it to write_stream
+            gen = stream_request()
+
+            # This 'peek' at the first token can be done, but st.write_stream
+            # is smart enough to start as soon as data arrives.
+            full_response = st.write_stream(gen)
+
+    # 3. Save to history
+    st.session_state.messages.append({"type": "ai", "content": full_response})
